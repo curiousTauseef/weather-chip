@@ -204,7 +204,7 @@ def Main():
     logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s\t%(levelname)s\t%(message)s',
                     datefmt='%m-%d %H:%M',
-                    filename='/var/run/wx-chip-debug.log',
+                    filename='/tmp/wx-chip-debug.log',
                     filemode='w')
     #formatter = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
     #ch = logging.StreamHandler()
