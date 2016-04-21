@@ -3,8 +3,8 @@
 # MODULE IMPORTS
 import Adafruit_BMP.BMP085 as BMP085  # ODDITY, HAVE TO DO IT THIS WAY
 import Adafruit_ADS1x15
-import AM2315
 import Adafruit_IO
+from am2315 import AM2315
 import ConfigParser
 import time
 import signal
@@ -13,6 +13,7 @@ import math
 import subprocess
 import threading
 import logging
+import os
 
 # GLOBAL VARIABLES
 
@@ -68,7 +69,7 @@ class WeatherStation:
         logging.debug('Setting up objects')
         self.bmp180 = BMP085.BMP085()
         self.ads1015 = Adafruit_ADS1x15.ADS1015()
-        #self.am2315 = AM2315()
+        self.am2315 = AM2315.AM2315()
         
         # READ OUR IO CONFIG
         config = ConfigParser.ConfigParser()
@@ -138,48 +139,53 @@ class WeatherStation:
     
         while not self.dead:
         
-            if disconnected.isSet():
-                self.do_connect()
-        
-            logging.debug("Gathering data")
-            # GET BMP805 DATA
-            self.data[0][1] = self.bmp180.read_temperature() # C
-            self.data[1][1] = self.bmp180.read_pressure()    # Pa
-            self.data[2][1] = self.bmp180.read_altitude()    # m
-            self.data[3][1] = self.compute_density(self.data[1][1],self.data[0][1]) # kg/m^3
-
-            # GET ADC CHANNEL 0: PHOTOCELL
-            photocell_volts = self.ads1015.read_adc(PHOTOCELL, gain=ADCGAIN6VDC) * (ADCGAIN6VDCVOLTS/ADCRESOLUTION)
-            self.data[4][1] = self.calc_lux(float(photocell_volts))
-
-            # GET ADC CHANNEL 1: ANEMOMETER
-            anemometer_volts = self.ads1015.read_adc(ANEMOMETER, gain=ADCGAIN2VDC) * (ADCGAIN2VDCVOLTS/ADCRESOLUTION)
-            self.data[5][1] = self.calc_windspeed(float(anemometer_volts))
-
-            # GET AM2315 DATA
-            #self.data[7][1], self.data[6][1] = self.am2315.read_humidity_temperature()
-
-            # TURN OFF THE LED
-            self.status_led_off()
+            try:
+                if disconnected.isSet():
+                    self.do_connect()
             
-            # PUBLISH DATA
-            try:                    
-                logging.debug("Sending data: client type: %s", self.io_client_type)
-                for data in self.data:
-                    tmp = "%.3f" % data[1]
-                    if self.io_client_type == "mqtt":
-                        self.io_client.publish(data[0], tmp)
-                    else:
-                        self.io_client.send(data[0], tmp)
-                    time.sleep(DATASENDSLEEP)
-                logging.debug("Sending data complete")
-                                    
-            except Exception, e:
-                logging.exception('** something broke **')
+                logging.debug("Gathering data")
+                # GET BMP805 DATA
+                self.data[0][1] = self.bmp180.read_temperature() # C
+                self.data[1][1] = self.bmp180.read_pressure()    # Pa
+                self.data[2][1] = self.bmp180.read_altitude()    # m
+                self.data[3][1] = self.compute_density(self.data[1][1],self.data[0][1]) # kg/m^3
+    
+                # GET ADC CHANNEL 0: PHOTOCELL
+                photocell_volts = self.ads1015.read_adc(PHOTOCELL, gain=ADCGAIN6VDC) * (ADCGAIN6VDCVOLTS/ADCRESOLUTION)
+                self.data[4][1] = self.calc_lux(float(photocell_volts))
+    
+                # GET ADC CHANNEL 1: ANEMOMETER
+                anemometer_volts = self.ads1015.read_adc(ANEMOMETER, gain=ADCGAIN2VDC) * (ADCGAIN2VDCVOLTS/ADCRESOLUTION)
+                self.data[5][1] = self.calc_windspeed(float(anemometer_volts))
+    
+                # GET AM2315 DATA
+                self.data[7][1], self.data[6][1] = self.am2315.read_humidity_temperature()
+    
+                # TURN OFF THE LED
+                self.status_led_off()
                 
-            self.status_led_on()
-            logging.debug("Starting sleep: %d seconds",SLEEPTIME)
-            time.sleep(SLEEPTIME)
+                # PUBLISH DATA
+                try:
+                    logging.debug("Sending data: client type: %s", self.io_client_type)
+                    for data in self.data:
+                        tmp = "%.3f" % data[1]
+                        if self.io_client_type == "mqtt":
+                            self.io_client.publish(data[0], tmp)
+                        else:
+                            self.io_client.send(data[0], tmp)
+                        time.sleep(DATASENDSLEEP)
+                    logging.debug("Sending data complete")
+                                        
+                except Exception, e:
+                    logging.exception('** something broke in publish **')
+                    raise
+                    
+                self.status_led_on()
+                logging.debug("Starting sleep: %d seconds",SLEEPTIME)
+                time.sleep(SLEEPTIME)
+        
+            except Exception, e:
+                logging.exception('** something else broke **')
 
 # FUNCTIONS
 def signal_handler(signal, frame):
@@ -200,8 +206,15 @@ def io_disconnected(client):
     #sys.exit(1)
 
 def Main():
+
+    # WRITE PID TO FILE
+    pid = os.getpid()
+    f = open("/tmp/wx-chip.pid","w")
+    f.write(str(pid))
+    f.close()
+
     # SETUP LOGGING
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s\t%(levelname)s\t%(message)s',
                     datefmt='%m-%d %H:%M',
                     filename='/tmp/wx-chip-debug.log',
@@ -216,7 +229,7 @@ def Main():
     logging.debug("Creating weather station")
     connected.clear()
     disconnected.clear()
-    wxstation = WeatherStation()    
+    wxstation = WeatherStation(io_client_type="rest")    
 
     # RUN THE WEATHER STATION
     wxstation.run()
