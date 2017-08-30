@@ -45,7 +45,7 @@ disconnected = threading.Event()
 
 # CLASSES
 class WeatherStation:
-    def __init__(self, io_client_conf="/etc/aio.cfg", io_client_type="mqtt"):
+    def __init__(self, io_client_conf="/etc/wxchip.cfg", io_client_type="mqtt"):
         # VARIABLES
         self.io_client = None
         self.io_client_conf = io_client_conf
@@ -65,17 +65,15 @@ class WeatherStation:
         self.last_pres_avg = 0
         self.pres_trending = "flat"
     
-        # CREATE OUR DEVICE OBJECTS
-        logging.debug('Setting up objects')
-        self.bmp180 = BMP085.BMP085()
-        self.ads1015 = Adafruit_ADS1x15.ADS1015()
-        self.am2315 = AM2315.AM2315()
-        
-        # READ OUR IO CONFIG
+        # READ OUR CONFIG
         config = ConfigParser.ConfigParser()
         config.read(self.io_client_conf)
         self.io_key = config.get("aio", "key", None)
         self.io_user = config.get("aio", "username", None)
+        # GET THE BUS NUMBERS FOR THE DEVICES
+        self.bmp180_bus = config.get("devices", "bmp180_bus", 1)
+        self.ads1015_bus = config.get("devices", "ads1015_bus", 1)
+        self.am2315_bus = config.get("devices", "am2315_bus", 1)
         
         if self.io_key == None:
             text = "No AIO Key found in %s" % self.io_client_conf
@@ -94,6 +92,12 @@ class WeatherStation:
         elif self.io_client_type == "rest":
             self.io_client = Adafruit_IO.Client(self.io_key)
 
+        # CREATE OUR DEVICE OBJECTS
+        logging.debug('Setting up objects')
+        self.bmp180 = BMP085.BMP085(busnum=self.bmp180_bus)
+        self.ads1015 = Adafruit_ADS1x15.ADS1015(busnum=self.ads1015_bus)
+        #self.am2315 = AM2315.AM2315(busnum=self.am2315_bus)
+
     def calc_lux(self,volts):
         lux = 0.0
         # GENERIC CURVE FIT FROM https://learn.adafruit.com/photocells/using-a-photocell
@@ -110,15 +114,15 @@ class WeatherStation:
     def calc_windspeed(self,volts):
         return -1
 
-    def status_led_off(self):
-        logging.debug('CHIP LED off')
-        # CANNOT USE I2C LIB AS WE NEED TO FORCE THE COMMAND DUE TO THE KERNEL OWNING THE DEVICE
-        subprocess.call('/usr/sbin/i2cset -f -y 0 0x34 0x93 0x0', shell=True)
-    
-    def status_led_on(self):
-        logging.debug('CHIP LED on')
-        # CANNOT USE I2C LIB AS WE NEED TO FORCE THE COMMAND DUE TO THE KERNEL OWNING THE DEVICE
-        subprocess.call('/usr/sbin/i2cset -f -y 0 0x34 0x93 0x1', shell=True)
+    #def status_led_off(self):
+    #    logging.debug('CHIP LED off')
+    #    # CANNOT USE I2C LIB AS WE NEED TO FORCE THE COMMAND DUE TO THE KERNEL OWNING THE DEVICE
+    #    subprocess.call('/usr/sbin/i2cset -f -y 0 0x34 0x93 0x0', shell=True)
+    #
+    #def status_led_on(self):
+    #    logging.debug('CHIP LED on')
+    #    # CANNOT USE I2C LIB AS WE NEED TO FORCE THE COMMAND DUE TO THE KERNEL OWNING THE DEVICE
+    #    subprocess.call('/usr/sbin/i2cset -f -y 0 0x34 0x93 0x1', shell=True)
 
     def do_connect(self):
         logging.debug("In do_connect: type: %s",self.io_client_type)
@@ -159,10 +163,10 @@ class WeatherStation:
                 self.data[5][1] = self.calc_windspeed(float(anemometer_volts))
     
                 # GET AM2315 DATA
-                self.data[7][1], self.data[6][1] = self.am2315.read_humidity_temperature()
+                #self.data[7][1], self.data[6][1] = self.am2315.read_humidity_temperature()
     
                 # TURN OFF THE LED
-                self.status_led_off()
+                #self.status_led_off()
                 
                 # PUBLISH DATA
                 try:
@@ -180,7 +184,7 @@ class WeatherStation:
                     logging.exception('** something broke in publish **')
                     raise
                     
-                self.status_led_on()
+                #self.status_led_on()
                 logging.debug("Starting sleep: %d seconds",SLEEPTIME)
                 time.sleep(SLEEPTIME)
         
@@ -229,7 +233,7 @@ def Main():
     logging.debug("Creating weather station")
     connected.clear()
     disconnected.clear()
-    wxstation = WeatherStation(io_client_type="rest")    
+    wxstation = WeatherStation(io_client_type="mqtt")    
 
     # RUN THE WEATHER STATION
     wxstation.run()
