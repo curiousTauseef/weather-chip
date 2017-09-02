@@ -148,16 +148,18 @@ class WeatherStation:
                     self.do_connect()
             
                 logging.debug("Gathering data")
-                # GET BMP805 DATA
+                # GET BMP805 DATA - TEMP AND ALT
                 self.data[0][1] = self.bmp180.read_temperature() # C
-                self.data[1][1] = self.bmp180.read_pressure()    # Pa
                 self.data[2][1] = self.bmp180.read_altitude()    # m
-                self.data[3][1] = self.compute_density(self.data[1][1],self.data[0][1]) # kg/m^3
     
                 # GET ADC CHANNEL 0: PHOTOCELL
                 photocell_volts = self.ads1015.read_adc(PHOTOCELL, gain=ADCGAIN6VDC) * (ADCGAIN6VDCVOLTS/ADCRESOLUTION)
                 self.data[4][1] = self.calc_lux(float(photocell_volts))
     
+                # GET BMP085 DATA - PRESSURE AND DENSITY
+                self.data[1][1] = self.bmp180.read_pressure()    # Pa
+                self.data[3][1] = self.compute_density(self.data[1][1],self.data[0][1]) # kg/m^3
+
                 # GET ADC CHANNEL 1: ANEMOMETER
                 anemometer_volts = self.ads1015.read_adc(ANEMOMETER, gain=ADCGAIN2VDC) * (ADCGAIN2VDCVOLTS/ADCRESOLUTION)
                 self.data[5][1] = self.calc_windspeed(float(anemometer_volts))
