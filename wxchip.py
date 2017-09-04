@@ -96,6 +96,7 @@ class WeatherStation:
         logging.debug('Setting up objects')
         self.bmp180 = BMP085.BMP085(busnum=self.bmp180_bus)
         self.ads1015 = Adafruit_ADS1x15.ADS1015(busnum=self.ads1015_bus)
+        # TODO: RE-ENABLE THIS
         #self.am2315 = AM2315.AM2315(busnum=self.am2315_bus)
 
     def calc_lux(self,volts):
@@ -114,15 +115,15 @@ class WeatherStation:
     def calc_windspeed(self,volts):
         return -1
 
-    #def status_led_off(self):
-    #    logging.debug('CHIP LED off')
-    #    # CANNOT USE I2C LIB AS WE NEED TO FORCE THE COMMAND DUE TO THE KERNEL OWNING THE DEVICE
-    #    subprocess.call('/usr/sbin/i2cset -f -y 0 0x34 0x93 0x0', shell=True)
-    #
-    #def status_led_on(self):
-    #    logging.debug('CHIP LED on')
-    #    # CANNOT USE I2C LIB AS WE NEED TO FORCE THE COMMAND DUE TO THE KERNEL OWNING THE DEVICE
-    #    subprocess.call('/usr/sbin/i2cset -f -y 0 0x34 0x93 0x1', shell=True)
+    def status_led_off(self):
+        logging.debug('CHIP LED off')
+        # TODO: POSSIBLY HOOK UP EXTERNAL LED
+        pass
+    
+    def status_led_on(self):
+        logging.debug('CHIP LED on')
+        # TODO: POSSIBLY HOOK UP EXTERNAL LED
+        pass
 
     def do_connect(self):
         logging.debug("In do_connect: type: %s",self.io_client_type)
@@ -165,10 +166,11 @@ class WeatherStation:
                 self.data[5][1] = self.calc_windspeed(float(anemometer_volts))
     
                 # GET AM2315 DATA
+                # TODO: RE-ENABLE THIS
                 #self.data[7][1], self.data[6][1] = self.am2315.read_humidity_temperature()
     
                 # TURN OFF THE LED
-                #self.status_led_off()
+                self.status_led_off()
                 
                 # PUBLISH DATA
                 try:
@@ -186,7 +188,7 @@ class WeatherStation:
                     logging.exception('** something broke in publish **')
                     raise
                     
-                #self.status_led_on()
+                self.status_led_on()
                 logging.debug("Starting sleep: %d seconds",SLEEPTIME)
                 time.sleep(SLEEPTIME)
         
@@ -209,7 +211,6 @@ def io_disconnected(client):
     logging.info('Disconnected from wx-chip data repo')
     connected.clear()
     disconnected.set()
-    #sys.exit(1)
 
 def Main():
 
@@ -220,16 +221,11 @@ def Main():
     f.close()
 
     # SETUP LOGGING
-    logging.basicConfig(level=logging.DEBUG,
+    logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s\t%(levelname)s\t%(message)s',
                     datefmt='%m-%d %H:%M',
                     filename='/tmp/wx-chip-debug.log',
                     filemode='w')
-    #formatter = logging.Formatter('%(asctime)s\t%(levelname)s\t%(message)s')
-    #ch = logging.StreamHandler()
-    #ch.setLevel(logging.DEBUG)
-    #ch.setFormatter(formatter)
-    #logging.getLogger('').addHandler(ch)
 
     # SETTING UP WEATHER STATION
     logging.debug("Creating weather station")
