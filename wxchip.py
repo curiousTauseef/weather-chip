@@ -35,6 +35,7 @@ R_AIR = 287.058
 P_FLAT_MAX_DELTA = 20.0
 P_FLAT_MIN_DELTA = -20.0
 
+# DEFAULTS
 LEDOFFTIMER = 5
 SLEEPTIME = 120
 DATASENDSLEEP = 0.01
@@ -52,11 +53,10 @@ class WeatherStation:
         self.io_client_type = io_client_type
         self.io_key = None
         self.io_user = None
+        self.io_update_rate = SLEEPTIME
         self.data = [
             ["wxchip-BMP180-temp", -1],
             ["wxchip-BMP180-baro", -1],
-            ["wxchip-BMP180-alt", -1],
-            ["wxchip-BMP180-density", -1],
             ["wxchip-lux", -1],
             ["wxchip-windspeed", -1],
             ["wxchip-AM2315-temp", -1],
@@ -70,6 +70,11 @@ class WeatherStation:
         config.read(self.io_client_conf)
         self.io_key = config.get("aio", "key", None)
         self.io_user = config.get("aio", "username", None)
+        # OVER-WRITE THE IO CLIENT TYPE WITH THE STUFF FROM THE CONFIG
+        self.io_client_type = config.get("aio", "type", self.io_client_type)
+        # GET THE UPDATE RATE FROM THE CONFIG
+        self.io_update_rate = config.get("aio", "update_rate", self.io_update_rate)
+
         # GET THE BUS NUMBERS FOR THE DEVICES
         self.bmp180_bus = config.get("devices", "bmp180_bus", 1)
         self.ads1015_bus = config.get("devices", "ads1015_bus", 1)
@@ -82,6 +87,8 @@ class WeatherStation:
         if self.io_user == None and self.io_client_type == "mqtt":
             text = "No AIO User found in %s" % self.io_client_conf
             raise ValueError(text)
+
+        # NO ERROR CHECKING FOR THE TYPE AND UPDATE RATE AS THEY HAVE DEFAULTS
         
         # CREATE OUR IO_CLIENT
         if self.io_client_type == "mqtt":
@@ -151,23 +158,21 @@ class WeatherStation:
                 logging.debug("Gathering data")
                 # GET BMP805 DATA - TEMP AND ALT
                 self.data[0][1] = self.bmp180.read_temperature() # C
-                self.data[2][1] = self.bmp180.read_altitude()    # m
     
                 # GET ADC CHANNEL 0: PHOTOCELL
                 photocell_volts = self.ads1015.read_adc(PHOTOCELL, gain=ADCGAIN6VDC) * (ADCGAIN6VDCVOLTS/ADCRESOLUTION)
-                self.data[4][1] = self.calc_lux(float(photocell_volts))
+                self.data[2][1] = self.calc_lux(float(photocell_volts))
     
                 # GET BMP085 DATA - PRESSURE AND DENSITY
                 self.data[1][1] = self.bmp180.read_pressure()    # Pa
-                self.data[3][1] = self.compute_density(self.data[1][1],self.data[0][1]) # kg/m^3
 
                 # GET ADC CHANNEL 1: ANEMOMETER
                 anemometer_volts = self.ads1015.read_adc(ANEMOMETER, gain=ADCGAIN2VDC) * (ADCGAIN2VDCVOLTS/ADCRESOLUTION)
-                self.data[5][1] = self.calc_windspeed(float(anemometer_volts))
+                self.data[3][1] = self.calc_windspeed(float(anemometer_volts))
     
                 # GET AM2315 DATA
                 # TODO: RE-ENABLE THIS
-                #self.data[7][1], self.data[6][1] = self.am2315.read_humidity_temperature()
+                #self.data[4][1], self.data[5][1] = self.am2315.read_humidity_temperature()
     
                 # TURN OFF THE LED
                 self.status_led_off()
